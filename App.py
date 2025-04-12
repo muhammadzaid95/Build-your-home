@@ -4,22 +4,27 @@ from datetime import datetime
 # הגדרות עמוד
 st.set_page_config(page_title="בנה ביתך", layout="wide")
 
-# אתחול session state
-if "user" not in st.session_state:
-    st.session_state.user = None
-if "user_type" not in st.session_state:
-    st.session_state.user_type = None
-if "users_db" not in st.session_state:
-    st.session_state.users_db = {}
-if "projects" not in st.session_state:
-    st.session_state.projects = []
-if "page" not in st.session_state:
-    st.session_state.page = None
+# טיפול בריענון
+if "do_rerun" in st.session_state and st.session_state.do_rerun:
+    st.session_state.do_rerun = False
+    st.experimental_rerun()
 
-# סגנון עיצוב
+# אתחול משתני מצב
+for key, default in {
+    "user": None,
+    "user_type": None,
+    "users_db": {},
+    "projects": [],
+    "page": None,
+    "do_rerun": False
+}.items():
+    if key not in st.session_state:
+        st.session_state[key] = default
+
+# עיצוב CSS
 st.markdown("""
 <style>
-body { direction: rtl; text-align: right; font-family: Arial; }
+body { direction: rtl; text-align: right; font-family: Arial, sans-serif; }
 .stApp { background-color: #f4f6f9; }
 h1, h2, h3 { color: #2c3e50; }
 .stButton>button {
@@ -31,10 +36,17 @@ h1, h2, h3 { color: #2c3e50; }
     width: 100%;
     transition: background-color 0.3s;
 }
-.stButton>button:hover { background-color: #2980b9; }
+.stButton>button:hover {
+    background-color: #2980b9;
+}
 .stTextInput>div>input, .stSelectbox>div>select {
     text-align: right;
     border-radius: 5px;
+    padding: 10px;
+}
+.stFileUploader {
+    border: 2px dashed #3498db;
+    border-radius: 8px;
     padding: 10px;
 }
 .card {
@@ -44,10 +56,15 @@ h1, h2, h3 { color: #2c3e50; }
     padding: 20px;
     margin-bottom: 20px;
 }
+@media (max-width: 600px) {
+    .stButton>button { font-size: 14px; padding: 10px; }
+    .stColumn { margin-bottom: 1rem; }
+    .card { padding: 15px; }
+}
 </style>
 """, unsafe_allow_html=True)
 
-# כותרת
+# תמונת כותרת וכותרת ראשית
 st.image("https://via.placeholder.com/1200x300.png?text=בנה+ביתך+-+הפלטפורמה+שלך+לבנייה+פרטית", use_column_width=True)
 st.title("בנה ביתך - ניהול בנייה פרטית 🏗️")
 
@@ -59,19 +76,19 @@ def register():
     email = st.text_input("אימייל", key="reg_email")
     password = st.text_input("סיסמה", type="password", key="reg_password")
     user_type = st.selectbox("סוג משתמש", ["בעל בית", "קבלן", "מהנדס", "ספק"], key="reg_user_type")
-
+    
     if st.button("צור משתמש"):
         if email in st.session_state.users_db:
-            st.error("משתמש כבר קיים עם אימייל זה.")
+            st.error("משתמש כבר קיים עם אימייל זה!")
         elif name and email and password:
             st.session_state.users_db[email] = {
                 "name": name,
                 "password": password,
                 "user_type": user_type
             }
-            st.success(f"ההרשמה הושלמה! שלום {name}, כעת תוכל להתחבר.")
+            st.success("נרשמת בהצלחה! התחבר כדי להמשיך.")
         else:
-            st.error("אנא מלא את כל השדות.")
+            st.error("אנא מלא את כל השדות!")
     st.markdown('</div>', unsafe_allow_html=True)
 
 # פונקציית התחברות
@@ -86,97 +103,98 @@ def login():
         if user_data and user_data["password"] == password:
             st.session_state.user = user_data["name"]
             st.session_state.user_type = user_data["user_type"]
-            st.experimental_rerun()
+            st.session_state.do_rerun = True  # ריענון
         else:
-            st.error("אימייל או סיסמה שגויים.")
+            st.error("אימייל או סיסמה שגויים!")
     st.markdown('</div>', unsafe_allow_html=True)
 
-# פונקציה להצגת פרויקטים שהועלו
-def show_projects():
-    st.markdown('<div class="card">', unsafe_allow_html=True)
-    st.subheader("תכניות שהועלו")
-    if st.session_state.projects:
-        for project in st.session_state.projects:
-            st.write(f"**{project['name']}** - מאת {project['user']} בתאריך {project['date']}")
-    else:
-        st.info("אין תכניות כרגע.")
-    st.markdown('</div>', unsafe_allow_html=True)
-
-# תוכן ראשי כשמשתמש מחובר
-if st.session_state.user:
-    st.header(f"שלום, {st.session_state.user} ({st.session_state.user_type})")
-    st.markdown('<div class="card">', unsafe_allow_html=True)
-    st.subheader("מה תרצה לעשות?")
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        if st.button("העלאת תכניות"):
-            st.session_state.page = "upload"
-            st.experimental_rerun()
-    with col2:
-        if st.button("צ'קליסט בנייה"):
-            st.session_state.page = "checklist"
-            st.experimental_rerun()
-    with col3:
-        if st.button("דירוג בעלי מקצוע"):
-            st.session_state.page = "rating"
-            st.experimental_rerun()
-    st.markdown('</div>', unsafe_allow_html=True)
-
-    # שליחת בקשה לבעלי מקצוע
-    st.markdown('<div class="card">', unsafe_allow_html=True)
-    st.subheader("שליחת בקשה לבעלי מקצוע")
-    profession = st.selectbox("בחר מקצוע", ["מהנדס קונסטרוקציה", "קבלן שלד", "יועץ אינסטלציה", "יועץ חשמל", "מפקח בנייה"])
-    if st.button("שלח בקשה"):
-        st.success(f"הבקשה נשלחה לכל {profession}!")
-    st.markdown('</div>', unsafe_allow_html=True)
-
-    show_projects()
-
-    if st.button("התנתק"):
-        for key in ["user", "user_type", "page"]:
-            st.session_state[key] = None
-        st.experimental_rerun()
-
-# תצוגה למשתמש לא מחובר
-else:
-    st.write("אנא התחבר או הירשם:")
+# עמוד התחברות / הרשמה
+if not st.session_state.user:
+    st.write("התחבר או הירשם כדי להתחיל:")
     col1, col2 = st.columns(2)
-    with col1:
-        login()
-    with col2:
-        register()
+    with col1: login()
+    with col2: register()
+    st.stop()
 
-# עמודים פנימיים
-if st.session_state.page == "upload" and st.session_state.user:
+# עמוד ראשי
+st.header(f"ברוך הבא, {st.session_state.user} ({st.session_state.user_type})!")
+st.markdown('<div class="card">', unsafe_allow_html=True)
+st.subheader("מה תרצה לעשות?")
+col1, col2, col3 = st.columns(3)
+
+with col1:
+    if st.button("העלאת תכניות"):
+        st.session_state.page = "upload"
+        st.experimental_rerun()
+with col2:
+    if st.button("צ'קליסט בנייה"):
+        st.session_state.page = "checklist"
+        st.experimental_rerun()
+with col3:
+    if st.button("דירוג אנשי מקצוע"):
+        st.session_state.page = "rating"
+        st.experimental_rerun()
+st.markdown('</div>', unsafe_allow_html=True)
+
+# שליחת בקשה לבעלי מקצוע
+st.markdown('<div class="card">', unsafe_allow_html=True)
+st.subheader("רשימת בעלי מקצוע לתפוצה")
+profession = st.selectbox("בחר סוג בעל מקצוע", ["מהנדס קונסטרוקציה", "קבלן שלד", "יועץ אינסטלציה", "יועץ חשמל", "מפקח בנייה"])
+if st.button("שלח בקשה לבעלי מקצוע"):
+    st.success(f"הבקשה נשלחה לכל {profession} ברשימה!")
+st.markdown('</div>', unsafe_allow_html=True)
+
+# תכניות שהועלו
+st.markdown('<div class="card">', unsafe_allow_html=True)
+st.subheader("הקלטות ותכניות")
+if st.session_state.projects:
+    for p in st.session_state.projects:
+        st.write(f"**{p['name']}** - הועלה ע״י {p['user']} בתאריך {p['date']}")
+else:
+    st.info("לא הועלו תכניות עדיין.")
+st.markdown('</div>', unsafe_allow_html=True)
+
+if st.button("התנתק"):
+    st.session_state.user = None
+    st.session_state.user_type = None
+    st.session_state.page = None
+    st.session_state.do_rerun = True
+
+# עמודים נוספים
+if st.session_state.page == "upload":
     st.markdown('<div class="card">', unsafe_allow_html=True)
-    st.header("העלאת תכנית + בקשת הצעות מחיר")
+    st.header("העלאת תכניות ובקשת הצעות מחיר")
     project_name = st.text_input("שם הפרויקט")
-    profession = st.selectbox("בחר מקצוע", ["מהנדס קונסטרוקציה", "קבלן שלד", "יועץ אינסטלציה", "יועץ חשמל", "מפקח בנייה"])
-    file = st.file_uploader("העלאת קובץ (PDF או DWG)", type=["pdf", "dwg"])
-    if file and st.button("פרסם בקשה"):
+    profession = st.selectbox("בחר סוג בעל מקצוע", ["מהנדס קונסטרוקציה", "קבלן שלד", "יועץ אינסטלציה", "יועץ חשמל", "מפקח בנייה"])
+    uploaded_file = st.file_uploader("העלה תכנית (PDF/DWG)", type=["pdf", "dwg"])
+    
+    if uploaded_file and st.button("פרסם בקשה להצעות"):
         st.session_state.projects.append({
             "name": project_name,
             "user": st.session_state.user,
             "date": datetime.now().strftime("%d/%m/%Y %H:%M"),
-            "filename": file.name
+            "file": uploaded_file.name
         })
-        st.success(f"הבקשה ל-{profession} פורסמה עבור {project_name}.")
+        st.success(f"בקשה ל-{profession} עבור '{project_name}' פורסמה!")
     st.markdown('</div>', unsafe_allow_html=True)
 
 elif st.session_state.page == "checklist":
     st.markdown('<div class="card">', unsafe_allow_html=True)
-    st.header("צ'קליסט בנייה")
-    checklist_items = ["רכישת מגרש", "היתר בנייה", "תכנון אדריכלי", "קונסטרוקציה", "שלד", "מערכות", "גמרים", "טופס 4"]
-    for item in checklist_items:
-        st.checkbox(item)
+    st.header("צ'קליסט תהליך הבנייה")
+    checklist = [
+        "רכישת מגרש", "קבלת היתר בנייה", "תכנון אדריכלי", "תכנון קונסטרוקטיבי",
+        "בניית שלד", "גמרים", "חיבור לתשתיות", "קבלת טופס 4"
+    ]
+    for item in checklist:
+        st.checkbox(item, key=f"check_{item}")
     st.markdown('</div>', unsafe_allow_html=True)
 
 elif st.session_state.page == "rating":
     st.markdown('<div class="card">', unsafe_allow_html=True)
-    st.header("דירוג בעלי מקצוע")
-    name = st.text_input("שם בעל מקצוע")
-    rating = st.slider("דירוג", 1, 5)
-    comment = st.text_area("הערה (אנונימית)")
+    st.header("דירוג אנשי מקצוע")
+    name = st.text_input("שם בעל המקצוע")
+    rating = st.slider("דירוג (1-5)", 1, 5)
+    comment = st.text_area("הערות (אנונימי)")
     if st.button("שלח דירוג"):
-        st.success(f"דירוג עבור {name} התקבל!")
+        st.success(f"דירוג עבור {name} נשלח!")
     st.markdown('</div>', unsafe_allow_html=True)
